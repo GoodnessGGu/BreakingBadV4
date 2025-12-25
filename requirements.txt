@@ -12,3 +12,4 @@ telethon
 websocket-client
 requests
 flask
+openpyxl
