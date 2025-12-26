@@ -305,7 +305,7 @@ def predict_signal(model, features_df):
         loss_prob = proba[0][0]
         win_prob = proba[0][1]
         
-        # Confidence Threshold: Only trade if model is > 55% sure it's a WIN
+        # Confidence Threshold: Standard
         threshold = 0.55 
         
         if win_prob >= threshold:

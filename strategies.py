@@ -88,13 +88,13 @@ def analyze_strategy(candles_data, use_ai=True):
     # Get Previous Completed Candle (c1)
     curr = df.iloc[-2] 
     
-    # Limits (Strict Mean Reversion)
+    # Limits (Strict Mean Reversion - The Profitable One)
     RSI_OVERBOUGHT = 65
     RSI_OVERSOLD = 35
     
     signal = None
 
-    # Trend Logic: (Disabled for Volume Test)
+    # Trend Logic: Disabled (Too Strict for Volume)
     # is_uptrend = curr['close'] > curr['ema_50']
     # is_downtrend = curr['close'] < curr['ema_50']
 
