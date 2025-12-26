@@ -82,29 +82,38 @@ def analyze_strategy(candles_data, use_ai=True):
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
+    # 3. EMA 50 (Trend Filter)
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
     # Get Previous Completed Candle (c1)
     curr = df.iloc[-2] 
     
-    # Limits (Relaxed for more volume)
-    RSI_OVERBOUGHT = 65  # Was 70
-    RSI_OVERSOLD = 35    # Was 30
+    # Limits
+    RSI_OVERBOUGHT = 65
+    RSI_OVERSOLD = 35
     
     signal = None
 
+    # Trend Logic:
+    # UPTREND: Close > EMA 50 (Only look for CALLs)
+    # DOWNTREND: Close < EMA 50 (Only look for PUTs)
+    is_uptrend = curr['close'] > curr['ema_50']
+    is_downtrend = curr['close'] < curr['ema_50']
+
     # CALL SIGNAL:
-    # Relaxed: Price is below or extremely close to Lower Band (within 0.1%)
-    # OR RSI is simply Oversold
-    
-    # Check "Near Lower Band": (Close <= Lower Band * 1.001)
+    # Rule 1: Must be in Uptrend (Trend Filter)
+    # Rule 2: Price dip to Lower Band OR Oversold
     near_lower = curr['close'] <= (curr['bb_lower'] * 1.0005)
-    near_upper = curr['close'] >= (curr['bb_upper'] * 0.9995)
     
-    if near_lower and curr['rsi'] < RSI_OVERSOLD:
+    if is_uptrend and near_lower and curr['rsi'] < RSI_OVERSOLD:
         signal = "CALL"
         
     # PUT SIGNAL:
-    # Relaxed: Price is above or extremely close to Upper Band
-    elif near_upper and curr['rsi'] > RSI_OVERBOUGHT:
+    # Rule 1: Must be in Downtrend (Trend Filter)
+    # Rule 2: Price rally to Upper Band OR Overbought
+    near_upper = curr['close'] >= (curr['bb_upper'] * 0.9995)
+    
+    if is_downtrend and near_upper and curr['rsi'] > RSI_OVERBOUGHT:
         signal = "PUT"
 
     # --- AI Confirmation ---
