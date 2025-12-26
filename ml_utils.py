@@ -7,6 +7,11 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
+# ... (rest of imports)
+
+# ... (rest of imports)
+
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -386,6 +391,7 @@ def prepare_features(df):
 
 
 
+
 def load_model():
     """Loads the trained model."""
     if os.path.exists(MODEL_PATH):
@@ -440,7 +446,6 @@ def predict_signal(model, features_df, direction=None):
              return 0
             
         return 1 # Approved
-
     except Exception as e:
         logger.error(f"Prediction error: {e}")
         return 1 # Fallback

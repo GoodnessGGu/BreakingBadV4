@@ -2,6 +2,13 @@ import asyncio
 import pandas as pd
 import numpy as np
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load env variables
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(env_path)
+
 from iqclient import IQOptionAPI
 from strategies import analyze_strategy
 
@@ -129,8 +136,8 @@ def simulate_trades(df, max_gales=2):
     return df
 
 async def main():
-    api = IQOptionAPI()
-    await api._connect()
+    email = os.getenv("IQ_EMAIL") or os.getenv("email")
+    password = os.getenv("IQ_PASSWORD") or os.getenv("password")
     
     logger.info("✅ Connected to IQ Option API (PRACTICE)")
     
