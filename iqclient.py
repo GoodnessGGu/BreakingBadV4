@@ -11,7 +11,10 @@ from trade import TradeManager
 from markets import MarketManager
 from accounts import AccountManager
 from wsmanager.iqwebsocket import WebSocketManager
+from wsmanager.iqwebsocket import WebSocketManager
 from wsmanager.message_handler import MessageHandler
+from risk_manager import risk_manager
+from news_manager import news_manager
 
 # Setup logging configuration
 logging.basicConfig(
@@ -430,6 +433,34 @@ async def run_trade(api, asset, direction, expiry, amount, max_gales=None, notif
         # Optimization: Start with configured preference (BINARY/DIGITAL/AUTO)
         preferred_type = "binary" if config.preferred_trading_type == "BINARY" else "digital" 
 
+        # 1. Check News Filter
+        is_news, reason = news_manager.is_news_time(asset)
+        if is_news:
+            logger.warning(f"📰 Trade Suppressed by News Filter: {reason}")
+            return {
+                "asset": asset,
+                "direction": direction,
+                "expiry": expiry,
+                "result": "NEWS_FILTER",
+                "profit": 0.0,
+                "gales": 0
+            }
+
+        # 2. Check Risk Limits
+        can_trade, reason = risk_manager.can_trade()
+        if not can_trade:
+            logger.warning(f"🛑 Trade Suppressed by Risk Manager: {reason}")
+            if notification_callback:
+                await notification_callback(f"🛑 {reason}")
+            return {
+                "asset": asset,
+                "direction": direction,
+                "expiry": expiry,
+                "result": "RISK_LIMIT",
+                "profit": 0.0,
+                "gales": 0
+            } 
+
         for gale in range(max_gales + 1):
             trade_type = preferred_type
             success = False
@@ -478,6 +509,7 @@ async def run_trade(api, asset, direction, expiry, amount, max_gales=None, notif
             # Accumulate PnL (pnl is negative on loss, positive on win)
             if pnl is not None:
                 total_pnl += pnl
+                risk_manager.update_trade_result(pnl)
 
             if pnl_ok and pnl > 0:
                 logger.info(f"✅ WIN on {asset} | Profit: ${pnl:.2f} | Net PnL: ${total_pnl:.2f} | Balance: ${balance:.2f}")
