@@ -21,7 +21,10 @@ from channel_monitor import ChannelMonitor
 from strategies import analyze_strategy, reload_ai_model
 from collect_data import run_collection_cycle
 from ml_utils import train_model
+from ml_utils import train_model
 from smart_trade import smart_trade_manager
+from risk_manager import risk_manager
+from news_manager import news_manager
 import pytz
 
 # --- Logging ---
@@ -94,7 +97,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [KeyboardButton("🧠 AI Toggle"), KeyboardButton("🛡️ Smart Gale"), KeyboardButton("🧠 Retrain")],
         [KeyboardButton("⏸ Pause"), KeyboardButton("▶ Resume"), KeyboardButton("⚙️ Settings")],
         [KeyboardButton("📡 Monitor"), KeyboardButton("🔄 Channel"), KeyboardButton("🔄 Mode")],
-        [KeyboardButton("ℹ️ Help")]
+        [KeyboardButton("🛑 Set Stop"), KeyboardButton("📰 News Toggle"), KeyboardButton("ℹ️ Help")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
@@ -114,7 +117,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /set\\_amount <n> - Trade Amount\n"
         "• /set\\_martingale <n> - Max Gales\n"
         "• /settings - View current config\n"
-        "• /mode <BINARY/DIGITAL> - Switch mode\n\n"
+        "• /settings - View current config\n"
+        "• /mode <BINARY/DIGITAL> - Switch mode\n"
+        "• /set_stop <amount> - Daily max loss\n"
+        "• /news <on/off> - Toggle News Filter\n\n"
         "📡 *Signals*\n"
         "• /switch\\_channel - Toggle Monitor Channel\n"
         "• /signals <text> - Parse signal text\n"
@@ -174,6 +180,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif text == "⚙️ Settings":
         await settings_info(update, context)
+    elif text == "🛑 Set Stop":
+        await update.message.reply_text("Usage: `/set_stop <amount>` (e.g. /set_stop 15)")
+    elif text == "📰 News Toggle":
+        await toggle_news(update, context)
     elif text == "ℹ️ Help":
         await help_command(update, context)
     else:
@@ -233,7 +243,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚙️ *Settings:*\n"
             f"💵 Amount: ${config.trade_amount} | 🔄 Gales: {config.max_martingale_gales}\n"
             f"⏸️ Paused: {config.paused} | 🚫 Suppress: {config.suppress_overlapping_signals}\n"
-            f"🧠 AI Filter: {'ON' if config.use_ai_filter else 'OFF'}\n\n"
+            f"⏸️ Paused: {config.paused} | 🚫 Suppress: {config.suppress_overlapping_signals}\n"
+            f"🧠 AI Filter: {'ON' if config.use_ai_filter else 'OFF'}\n"
+            f"{risk_manager.get_status()}\n"
+            f"{news_manager.get_status()}\n\n"
             f"📈 *Open Trades:*{trades_info}"
         )
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -409,8 +422,38 @@ async def set_martingale(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         config.max_martingale_gales = count
         await update.message.reply_text(f"✅ Max martingale gales set to {config.max_martingale_gales}")
-    except ValueError:
         await update.message.reply_text("⚠️ Invalid number.")
+
+async def set_stop_loss(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(f"USAGE: /set_stop <amount>\nCurrent: ${config.daily_stop_loss}")
+        return
+    try:
+        amount = float(context.args[0])
+        config.daily_stop_loss = amount
+        update_env_variable("DAILY_STOP_LOSS", str(amount))
+        msg = f"✅ Daily Stop Loss set to: -${amount:.2f}" if amount > 0 else "✅ Daily Stop Loss DISABLED (0.0)"
+        await update.message.reply_text(msg)
+    except ValueError:
+        await update.message.reply_text("⚠️ Invalid amount.")
+
+async def toggle_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        # Toggle
+        news_manager.toggle(not config.news_filter_on)
+        update_env_variable("NEWS_FILTER_ON", str(config.news_filter_on))
+        await update.message.reply_text(f"📰 News Filter Toggled: {'ON' if config.news_filter_on else 'OFF'}")
+        return
+        
+    mode = context.args[0].lower()
+    if mode in ['on', 'true', 'yes']:
+        news_manager.toggle(True)
+        await update.message.reply_text("✅ News Filter ENABLED.")
+    else:
+        news_manager.toggle(False)
+        await update.message.reply_text("❌ News Filter DISABLED.")
+    
+    update_env_variable("NEWS_FILTER_ON", str(config.news_filter_on))
 
 async def switch_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global active_channel_key
@@ -910,6 +953,8 @@ def main():
     app.add_handler(CommandHandler("confirm_signals", confirm_signals))
     app.add_handler(CommandHandler("retrain", retrain_command)) # Manual trigger
     app.add_handler(CommandHandler("smart_gale", toggle_smart_gale))
+    app.add_handler(CommandHandler("set_stop", set_stop_loss))
+    app.add_handler(CommandHandler("news", toggle_news))
 
     app.add_error_handler(error_handler)
 
